@@ -411,6 +411,60 @@ destroyed on unmount), subscribes to `city`, never re-renders via React.
 → live deltas + tweens → click-to-open + tooltips → playback. Steps 1–2 need
 nothing from the backend.
 
+### 7.4 An expansive world (scaling the view beyond SimCity)
+
+SimCity is a *bounded* map you build. Mombasa's city is a **boundless, zoomable,
+living world you explore** — closer to Google Earth × SimCity × an MMO — that
+grows from real activity. We start small (§7.3, one district) but the rendering
+and data model are designed to scale to a near-infinite world. Five techniques,
+together, make that possible:
+
+1. **Chunk & stream the world.** Divide the world into fixed-size **chunks**
+   (e.g. 64×64 plots). The client only fetches/renders chunks near the viewport;
+   panning streams neighbors in and unloads distant ones. Client cost tracks the
+   *viewport*, not the world size. `GET /city` (one snapshot) becomes
+   `GET /city/chunks?bbox=…&lod=…`, and the global `city` WebSocket channel
+   becomes per-chunk subscriptions (`city:chunk:{id}`).
+2. **Level of detail + semantic zoom.** Render different representations per zoom
+   level: far out a district is one colored block / health heatmap; mid-zoom is
+   building footprints; close-up is full animated sprites with labels. Labels and
+   detail appear/disappear by zoom; far out, plots **cluster** ("Harbor District —
+   1,240 buildings"). Cheap trick: bake a district to a `RenderTexture` once and
+   show that texture when zoomed out. This bounds on-screen object counts at every
+   zoom.
+3. **Viewport culling + spatial index.** pixi-viewport culls offscreen sprites; a
+   quadtree/grid indexes the data ("what's in this bbox"). Backend stores plots in
+   global coordinates with a spatial index (PostGIS or a grid index) so chunk
+   queries are fast.
+4. **Deterministic procedural growth.** A seeded `WorldLayout` function
+   deterministically generates `Region → District → Street → Plot` from the
+   activity data; real homes/apps/waves then occupy them. Because it's seeded and
+   deterministic, the same event history always yields the same world — preserving
+   "you can't fake the city" and **playback** at world scale. Growth rules drive
+   expansiveness: a full district spawns an adjacent one; popular apps become
+   landmarks; stale areas show blight.
+5. **GPU-friendly heavy layers.** `@pixi/tilemap` for the repetitive ground/road
+   layer, `ParticleContainer` for large counts of simple moving sprites, texture
+   atlases throughout, and PixiJS v8's WebGPU path for the densest scenes.
+
+**A tier above District.** The hierarchy gains a top level:
+`World → Region/City → District → Street → Plot → Building` (interiors later). An
+org can be its own district or city. This + chunking + procedural growth is what
+yields near-infinite room.
+
+**The "alive" layer** (what makes it feel bigger than SimCity): citizens/agents
+as moving dots, vehicles on roads, day/night cycle, weather, and activity
+particles on `WaveResolved`. All cosmetic, all cullable, all driven by the event
+stream.
+
+**Navigation UX.** Smooth zoom/pan, a search box to **fly to** any place (a
+home, an app, a district), a minimap, breadcrumbs (`World > Harbor District >
+Dock St`), and deep-linkable **addresses** so a notification can fly you straight
+to the relevant building.
+
+This stays a **deterministic projection** — just chunked, multi-scale, and
+procedurally grown. (Domain shapes: `DOMAIN_MODEL.md §9`.)
+
 ---
 
 ## 8. AI agents
