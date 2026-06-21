@@ -51,6 +51,16 @@ These reflect the design discussion and are the current direction:
 11. **Work spans disciplines.** A Wave/Request carries a *discipline* (coding,
     design, marketing, docs, ops, jobs, …) alongside its kind; non-coders are
     first-class. (§3.3)
+12. **Credits are the resource economy and the revenue engine.** AI agents,
+    compute, and storage cost real money; usage is metered and debits credits
+    from a wallet, with budgets that halt runaway cost. Mombasa makes money by
+    selling credits (free tier + paid top-ups), subscription tiers, and fees.
+    Three currencies stay distinct: reputation, credits, money. (§6.4)
+13. **Waves have visibility.** `PUBLIC` (in the feed), `UNLISTED` (invite/link
+    only), or `PRIVATE` (participants only). Private/invite-only problems are
+    first-class. (§2.4)
+14. **Start small, build street by street.** The city begins as one district
+    with a few streets and grows; features ship as thin vertical slices. (§7.3)
 
 ### Still open (to decide)
 
@@ -143,6 +153,9 @@ A Wave carries a **kind** (its purpose):
 
 …a **discipline** (the kind of work: `CODING`, `DESIGN`, `MARKETING`, `DOCS`,
 `OPS`, `JOBS`, …; see §3.3)…
+
+…a **visibility** (`PUBLIC` in the feed · `UNLISTED` invite/link only ·
+`PRIVATE` participants only) — so problems can be private or invite-only…
 
 …and a **lifecycle facet** (a gadget, not the Wave's whole nature):
 
@@ -307,10 +320,35 @@ This is the most consequential, compliance-heavy feature — it needs payments/
 escrow, identity & org verification, contracts, dispute handling, and tax/
 regulatory care.
 
-> **Open decision D.** Is the real-money bridge part of the core product, or do
-> we ship an in-platform economy (points/reputation/badges) first and add
-> real-money as a deliberate later layer? **Current lean: in-platform first**,
-> real-money bridge in Phase 4 (§13).
+> **Open decision D.** Real-money *payouts to users* — part of the core product,
+> or a deliberate later layer? **Current lean: in-platform first**, payouts in
+> Phase 4 (§13). Note: real money *in* (buying credits, §6.4) ships earlier than
+> real money *out* (payouts).
+
+### 6.4 Credits, costs & how Mombasa makes money
+
+Mombasa is a social coding platform, and **running it costs real money** — AI
+agents (LLM tokens + tool calls), compute (sandboxes), and storage (git repos,
+artifacts, app hosting) all have real provider bills. So the platform meters
+usage and **must monetize it**. Three currencies, kept distinct:
+
+- **Reputation** — earned status; not spendable.
+- **Credits** — a spendable resource budget that is *consumed by real compute &
+  storage*. Every consuming action is metered and debits the **responsible
+  wallet** (the "who pays" policy is configurable per Wave/App: owner, team,
+  app, or sponsor). Budgets/ceilings per agent/wave/app **halt** activity when
+  exhausted, so no one is surprised by a runaway bill.
+- **Money** — real money, gated by decision D for *payouts*.
+
+**Revenue model.** Users get a free tier of credits and **buy more with real
+money** (primary inbound revenue); paid **subscription tiers** (Free/Pro/Org/
+Enterprise) bundle credits, higher limits, more autonomous agents, and private
+waves at scale; plus marketplace/competition fees and sponsored waves. Margin
+lives in a cost-plus `PriceList`. (Detailed in `DOMAIN_MODEL.md §8`.)
+
+> This is the key reason real money can enter (credit purchases) *before* we
+> build user payouts (decision D): selling credits funds the infrastructure
+> immediately, while payouts carry the heavier compliance load.
 
 ---
 
@@ -344,11 +382,18 @@ Render in the browser as **2D isometric** with **PixiJS** (WebGL). It's a
 *rendering* problem, not a game-engine problem; the backend computes state, the
 frontend draws it. (Three.js + react-three-fiber is the 3D upgrade path.)
 
-**Data contract.** `GET /city` returns a `CityState`: districts, each a grid of
-plots with a *semantic* type (`EMPTY`, `HOME`, `BUILDING(kind, level)`, `APP`,
-`LANDMARK`, `BLIGHT`, `PARK`), the owning Wave/App id, and district health. The
-WebSocket `city` channel streams deltas (`PlotChanged`, `BuildingUpgraded`,
-`AppLaunched`, `LandmarkErected`, `BlightRose`).
+**Geography — built street by street.** The city is `District → Street → Plot`,
+and every Plot has a real **address** (`12 Harbor St`). Homes, app buildings,
+and landmarks all sit at an address, so "where you live" and "where an app is"
+are concrete, linkable places. **Start small:** one district with a handful of
+streets, growing outward as the city fills in.
+
+**Data contract.** `GET /city` returns a `CityState`: districts → streets →
+plots, each plot with a *semantic* type (`EMPTY`, `HOME`, `CAMPUS`,
+`BUILDING(kind, level)`, `APP`, `LANDMARK`, `BLIGHT`, `PARK`), an address, the
+owning Wave/App id, and district health. The WebSocket `city` channel streams
+deltas (`PlotChanged`, `BuildingUpgraded`, `AppLaunched`, `LandmarkErected`,
+`BlightRose`).
 
 **Renderer pattern.** Iso transform `screenX = (x−y)·tileW/2`,
 `screenY = (x+y)·tileH/2`, drawn back-to-front by `x+y`; a GPU-batched **sprite
@@ -377,7 +422,9 @@ Agents are participants (§2.6), with explicit, careful design.
 - **Owner** (Citizen or Org) — accountable.
 - **Skill manifest** — declared capabilities across disciplines, used for auto-match.
 - **Autonomy level:** `SUGGEST` → `ACT_IN_SANDBOX` → `AUTONOMOUS` (high-trust only).
-- **Permission scope** — allowlist of tools/resources, spend & rate limits.
+- **Permission scope** — allowlist of tools/resources, a **credit budget**
+  (agents cost real money; the agent halts when its budget is exhausted, §6.4),
+  and rate limits.
 
 ### 8.2 Orchestration
 
@@ -434,13 +481,15 @@ extractable to Kafka later.
 ### 9.3 Modular monolith + events
 
 One deployable, split into bounded contexts (`identity`, `waves`, `code`,
-`apps`, `agents`, `reputation`, `city`, `feed`, `notifications`) communicating
-**in-process via domain events**, never reaching into each other's tables.
+`apps`, `agents`, `economy` (reputation/rewards/credits/billing), `city`,
+`feed`, `notifications`) communicating **in-process via domain events**, never
+reaching into each other's tables.
 
 Key events: `CitizenJoined`, `WaveCreated`, `ParticipantJoined`, `BlipPosted`,
 `Committed`, `SubmissionAccepted`, `WaveResolved`, `AppLaunched`, `AppUsed`,
-`ReuseCredited`, `ReputationAwarded`, `RewardPaid`, `AgentActionRequested`,
-`AgentActionCompleted`. `CityProjection`, `feed`, `reputation`, and
+`ReuseCredited`, `ResourceMetered`, `CreditsDebited`, `WalletToppedUp`,
+`ReputationAwarded`, `RewardPaid`, `AgentActionRequested`, `AgentHalted`,
+`AgentActionCompleted`. `CityProjection`, `feed`, `economy`, and
 `notifications` are pure consumers.
 
 ### 9.4 Real-time
@@ -463,14 +512,16 @@ private visibility via wavelets.
 
 ## 11. Data model (initial sketch)
 
-Postgres; `*_data JSONB` for flexible fields. Code lives in **git**, live edits
-in **CRDT docs** — not these tables.
+> The **authoritative** domain model (aggregates, value objects, invariants)
+> lives in `DOMAIN_MODEL.md`. This is a quick relational sketch. Postgres;
+> `*_data JSONB` for flexible fields. Code lives in **git**, live edits in
+> **CRDT docs** — not these tables.
 
-- `citizen(id, handle, display_name, email, home_district_id, reputation_global, created_at)`
+- `citizen(id, handle, display_name, email, home_id, reputation_global, created_at)`
 - `organization(id, name, slug, verified, created_at)` · `org_member(org_id, citizen_id, role)`
-- `home(id, owner_type, owner_id, district_id, plot, level)` ← per citizen/org
-- `agent(id, owner_type, owner_id, name, autonomy_level, manifest JSONB, reputation, status)`
-- `wave(id, kind, discipline, title, brief, status, district_id, creator_type, creator_id, app_id NULL, rewards JSONB, deadline, created_at)`
+- `home(id, owner_type, owner_id, district_id, street_id, plot, level)` ← per citizen/org
+- `agent(id, owner_type, owner_id, name, autonomy_level, manifest JSONB, credit_budget, reputation, status)`
+- `wave(id, kind, discipline, visibility, title, brief, status, district_id, creator_type, creator_id, app_id NULL, rewards JSONB, deadline, created_at)`
 - `wavelet(id, wave_id, name, visibility)` · `blip(id, wavelet_id, type, author_type, author_id, body, created_at)`
 - `wave_skill(wave_id, skill)` · `wave_tag(wave_id, tag)`
 - `participant(wave_id, member_type, member_id, role, joined_at)` ← member is Citizen *or* Agent
@@ -479,13 +530,17 @@ in **CRDT docs** — not these tables.
 - `app(id, name, slug, status, district_id, deployment_url, source_wave_id, created_at)`
 - `app_owner(app_id, member_type, member_id, share)` · `app_usage(app_id, metric, value, as_of)`
 - `app_dependency(app_id, component_owner_type, component_owner_id, weight)` ← reuse credit
-- `reward(id, subject_type, subject_id, kind, amount, currency NULL, reason, source_id, created_at)`
+- `credit_wallet(id, owner_type, owner_id, balance, low_balance_threshold)`
+- `usage_record(id, resource, quantity, unit_cost, credits_debited, payer_type, payer_id, attributed_to, at)`
+- `subscription(id, owner_type, owner_id, tier, included_credits_month, renews_at)` · `price_list(resource, unit_cost)`
+- `reward(id, subject_type, subject_id, kind, points, credits, money, currency NULL, reason, source_id, created_at)`
 - `reputation_event(id, subject_type, subject_id, skill, district_id, delta, reason, created_at)`
-- `district(id, name, geometry JSONB)` · `city_metric(district_id, metric, value, as_of)`
+- `district(id, name, geometry JSONB)` · `street(id, district_id, name)` · `city_metric(district_id, metric, value, as_of)`
 - `domain_event(id, type, payload JSONB, occurred_at)` ← drives projections & playback
 
-**Polymorphic actors.** Citizens and Agents both act as participants/authors/
-committers/owners, modeled as a `(type, id)` pair, validated in the service layer.
+**Polymorphic actors.** Citizens, Orgs, and Agents act as participants/authors/
+committers/owners/payers, modeled as a `(type, id)` pair, validated in the
+service layer.
 
 ---
 
@@ -544,8 +599,9 @@ extract the orchestrator; Kafka for the event log; (possibly) Wave federation.
 
 1. **Open threads A/B/C/D** from §0 (everything-is-a-Wave; naming incl. "App";
    federation; real-money bridge scope).
-2. **Agent compute cost** — who pays for an agent's LLM/tool usage: owner, team,
-   Wave sponsor, or the App? Need metering/billing.
+2. **Agent compute cost** — *addressed* by the credits/metering model (§6.4,
+   `DOMAIN_MODEL.md §8`); the payer (owner/team/app/sponsor) is a configurable
+   policy. Open detail: the sensible *default* payer and pricing/margin levels.
 3. **Verification depth** — how far do we automate (CI checks, deploy previews)
    vs. human review?
 4. **App hosting** — do we run user app deployments ourselves (cost, security,
