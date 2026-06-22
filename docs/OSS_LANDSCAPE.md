@@ -172,4 +172,51 @@ Directly relevant to the credits economy — these meter usage and handle plans:
 | Metering/billing | **OpenMeter** or **Lago** | in front of Stripe |
 | Auth | **Keycloak** | JVM-native |
 | Agents | **Anthropic Java SDK** + **Spring AI** | model `claude-opus-4-8` |
-</content>
+
+---
+
+## 11. Collaborative-git frameworks & extensions
+
+**Headline:** no single OSS framework does "real-time collaborative git with
+humans **and** AI agents as peer committers" — Mombasa composes that from JGit
+(host + attributable commits) + Yjs (live layer) + an editor (§4). But several
+adjacent OSS projects are worth borrowing from:
+
+**A. Real-time co-editing layered on git** (our Wave-over-git pattern). Build it
+from a CRDT live layer + git host; there's no turnkey framework.
+- **Yjs** (MIT) / **Automerge** (MIT) + editor bindings — the live layer.
+- **Ink & Switch — Patchwork / Automerge** — research on local-first, git-like
+  branching/merging with CRDTs (closest conceptual prior art).
+- *(Proprietary, not frameworks: VS Code **Live Share**, **CodeTogether**.)*
+
+**B. Collaboration data stored *inside* git** (the "extensions" pattern — embed
+metadata as git objects; fits our replayable-log spine, could hold submissions/
+reviews):
+- **git-bug** (MIT, Go) — distributed issue tracker embedded in git.
+- **git-appraise** (Apache-2.0, Google) — distributed code review stored in git.
+- underlying **git-notes** mechanism.
+
+**C. Decentralized / federated collaboration on git** (→ open thread C,
+federation):
+- **Radicle** (OSS, Rust) — P2P sovereign GitHub alternative: git + identities +
+  issues/patches over gossip. Closest thing to a "collaborative git framework"
+  (async, not live).
+- **ForgeFed** — ActivityPub-based protocol for *federating* forges (PRs/issues
+  across servers); the spec answer to "orgs run federating Mombasa nodes."
+- **Forgejo/Gitea** (MIT), **Gerrit** (Apache-2.0) — forges / code review to
+  embed or study.
+
+**D. Modern git-compatible VCS with better collaboration ergonomics:**
+- **Jujutsu (jj)** (Apache-2.0, Google) — git-compatible, superior concurrent-
+  change handling.
+- **Sapling** (Meta, OSS) — git-compatible, ships a web review UI.
+- **Pijul** (Rust), **Fossil** — sound patch-merge theory but **not** git-
+  compatible (would mean leaving git).
+
+**E. Cloud collaborative IDEs (git-based build-on candidates):** **Eclipse Che**/
+**Theia** (EPL), **Gitpod** (OSS core), **code-server** (MIT), **Sandpack**
+(Apache-2.0).
+
+**Takeaway for Mombasa:** stay on plain git via **JGit** + **Yjs** for the live
+layer; study **Radicle** (identities/patches) and **git-bug/git-appraise**
+(metadata-in-git) for patterns; adopt **ForgeFed** if/when we do federation.
